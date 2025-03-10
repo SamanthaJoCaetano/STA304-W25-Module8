@@ -14,7 +14,14 @@ library(tidyverse)
 ```
 
 
-# 1 Read in the sample data.
+# Poststratification
+
+Let's try to predict the probability of voting for the Liberal party. We will use the CES data as our survey data, and we will use the General Social Survey as our Census data.
+
+Let's use age and sex as the post-stratification variables.
+
+
+## 1 Read in the sample data.
 
 ```{r, include = FALSE}
 
@@ -23,25 +30,26 @@ survey_data <- read_csv("sample_ces-phone.csv")
 ```
 
 ```{r, include = FALSE}
-
 survey_data <- 
   survey_data %>% 
   mutate(age = 2019-q2,
          vote_liberal = ifelse(q11==1, 1, 0)) %>% 
-  select(age, vote_liberal)
+  mutate(sex = case_when(q3==1 ~ "Male",
+                         q3==2 ~ "Female")) %>% 
+  select(age, sex, vote_liberal)
 
 ```
 
-# 2 Model the sample outcome of interest.
+## 2 Model the sample outcome of interest.
 
 
 ```{r, include=FALSE}
 
-model <- lm(vote_liberal ~ age, data=survey_data)
+model <- glm(vote_liberal ~ age + sex, data=survey_data, family="binomial")
 
 ```
 
-# 3 Read in the census data.
+## 3 Read in the census data.
 
 Here you can load in the census data. 
 
@@ -50,25 +58,26 @@ census_data <- read_csv("census_data-gss.csv")
 
 census_data <- census_data %>% 
   mutate(age=round(age)) %>% 
-  select(age)
+  select(age, sex)
 ```
 
 
-# 4 Apply the model to the census counts.
+## 4 Apply the model to the census counts.
 
 
 ```{r, include=FALSE}
 
 # Here I will perform the post-stratification calculation
 census_data_counts <- census_data %>% 
-  group_by(age) %>% 
+  group_by(age, sex) %>%
   summarise(n=n())
 
 census_data_counts$estimate <-
   model %>%
-  predict(newdata = census_data_counts)
+  predict(newdata = census_data_counts, type="response")
 
 census_data_counts %>% 
+  ungroup(age) %>% 
   mutate(liberal_predict_prop = estimate*n) %>%
   summarise(liberal_predict = sum(liberal_predict_prop)/sum(n))
 
